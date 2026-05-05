@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Painel - Clube Gula & Gole</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="admin-shell">
+    <header class="admin-header">
+      <div>
+        <p class="eyebrow">Painel interno</p>
+        <h1>Clube Gula & Gole</h1>
+      </div>
+      <img class="mini-logo" src="assets/logo.png" alt="Gula & Gole" />
+    </header>
+
+    <section class="admin-card">
+      <h2>Acesso</h2>
+      <div class="grid-2">
+        <input id="adminPin" type="password" placeholder="Digite o PIN do admin" />
+        <button onclick="loadAdmin()">Entrar / atualizar</button>
+      </div>
+      <p class="small">O PIN é conferido no Apps Script. Troque o PIN padrão antes de usar.</p>
+    </section>
+
+    <section class="admin-card">
+      <h2>Campanha ativa</h2>
+      <div class="grid-3">
+        <input id="campaignName" placeholder="Nome da campanha. Ex.: Rodada Premiada" />
+        <input id="campaignDescription" placeholder="Descrição curta" />
+        <select id="campaignType">
+          <option value="sorteio">Sorteio</option>
+          <option value="combo">Combo</option>
+          <option value="promocao">Promoção</option>
+          <option value="fidelidade">Fidelidade</option>
+        </select>
+      </div>
+      <div class="grid-4">
+        <input id="startTime" placeholder="Início. Ex.: 18:00" />
+        <input id="endTime" placeholder="Fim. Ex.: 23:00" />
+        <input id="tableLimit" placeholder="Limite por mesa. Ex.: 2" />
+        <input id="phoneLimit" placeholder="Limite por WhatsApp. Ex.: 1" />
+      </div>
+      <div class="grid-3">
+        <input id="restaurantLat" placeholder="Latitude do restaurante" />
+        <input id="restaurantLng" placeholder="Longitude do restaurante" />
+        <input id="radiusMeters" placeholder="Raio em metros. Ex.: 200" />
+      </div>
+      <button onclick="saveConfig()">Salvar configurações</button>
+      <div id="configResult" class="result hidden"></div>
+    </section>
+
+    <section class="stats">
+      <div class="stat"><span id="totalCount">0</span><small>Cadastros hoje</small></div>
+      <div class="stat"><span id="validCount">0</span><small>Válidos</small></div>
+      <div class="stat"><span id="tableCount">0</span><small>Mesas válidas</small></div>
+      <div class="stat"><span id="blockedCount">0</span><small>Bloqueados</small></div>
+    </section>
+
+    <section class="admin-card">
+      <h2>Cadastros de hoje</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Hora</th>
+              <th>Nome</th>
+              <th>WhatsApp</th>
+              <th>Mesa</th>
+              <th>Status</th>
+              <th>Motivo</th>
+            </tr>
+          </thead>
+          <tbody id="entriesTable"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="config.js"></script>
+  <script src="common.js"></script>
+  <script src="admin.js"></script>
+</body>
+</html>

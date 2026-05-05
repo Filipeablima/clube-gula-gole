@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Telão - Clube Gula & Gole</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="screen-page">
+  <main class="screen-shell">
+    <img class="screen-logo" src="assets/logo.png" alt="Gula & Gole" />
+    <p class="eyebrow">Clube Gula & Gole apresenta</p>
+    <h1 id="screenCampaign">Rodada Premiada</h1>
+
+    <div id="drawBox" class="draw-box">?</div>
+
+    <button class="big-button" onclick="startDraw()">Sortear mesa</button>
+
+    <p id="screenInfo" class="screen-info">Aguardando sorteio...</p>
+
+    <div class="pin-row">
+      <input id="screenPin" type="password" placeholder="PIN do admin" />
+      <button onclick="loadScreenData()">Atualizar mesas</button>
+    </div>
+  </main>
+
+  <script src="config.js"></script>
+  <script src="common.js"></script>
+  <script src="telao.js"></script>
+</body>
+</html>

@@ -1,0 +1,182 @@
+:root{
+  --bg:#050505;
+  --card:#111;
+  --card2:#181818;
+  --red:#e30613;
+  --yellow:#ffd400;
+  --white:#fff;
+  --muted:#b8b8b8;
+  --border:rgba(255,255,255,.12);
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family: Arial, Helvetica, sans-serif;
+  background: radial-gradient(circle at top, #222 0%, var(--bg) 45%);
+  color:var(--white);
+}
+button{
+  border:0;
+  border-radius:14px;
+  padding:15px 18px;
+  background:var(--red);
+  color:white;
+  font-weight:800;
+  cursor:pointer;
+  transition:.2s;
+}
+button:hover{filter:brightness(1.1); transform:translateY(-1px)}
+input,select{
+  width:100%;
+  padding:14px;
+  border-radius:12px;
+  border:1px solid var(--border);
+  background:#090909;
+  color:white;
+  outline:none;
+}
+label{
+  display:block;
+  text-align:left;
+  font-size:.9rem;
+  color:#eee;
+  margin-bottom:12px;
+}
+label input{margin-top:6px}
+.hidden{display:none!important}
+.app-shell{
+  width:min(480px, 100%);
+  margin:0 auto;
+  padding:20px;
+}
+.brand-card,.form-card,.admin-card{
+  background:rgba(17,17,17,.92);
+  border:1px solid var(--border);
+  border-radius:26px;
+  padding:22px;
+  margin:16px 0;
+  box-shadow:0 20px 60px rgba(0,0,0,.35);
+}
+.logo{width:220px; max-width:78%; display:block; margin:0 auto 10px}
+.mini-logo{width:92px}
+.eyebrow{
+  margin:0 0 8px;
+  color:var(--yellow);
+  text-transform:uppercase;
+  letter-spacing:.08em;
+  font-size:.78rem;
+  font-weight:900;
+}
+h1,h2,h3{margin:0 0 12px}
+.subtitle{color:var(--muted); line-height:1.45}
+.small{color:var(--muted); font-size:.82rem; line-height:1.45}
+.notice,.result{
+  padding:14px;
+  border-radius:14px;
+  margin:12px 0;
+  background:#201500;
+  border:1px solid rgba(255,212,0,.35);
+  color:#fff1a8;
+}
+.result.success{background:#07200f; border-color:#2ed36f; color:#d9ffe5}
+.result.error{background:#250909; border-color:#e30613; color:#ffd5d5}
+.admin-shell{
+  width:min(1180px,100%);
+  padding:22px;
+  margin:0 auto;
+}
+.admin-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+}
+.grid-2,.grid-3,.grid-4{
+  display:grid;
+  gap:10px;
+  margin:10px 0;
+}
+.grid-2{grid-template-columns:repeat(2,1fr)}
+.grid-3{grid-template-columns:repeat(3,1fr)}
+.grid-4{grid-template-columns:repeat(4,1fr)}
+.stats{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:12px;
+  margin:16px 0;
+}
+.stat{
+  background:var(--card2);
+  border:1px solid var(--border);
+  border-radius:18px;
+  padding:18px;
+}
+.stat span{
+  display:block;
+  font-size:2rem;
+  color:var(--yellow);
+  font-weight:900;
+}
+.stat small{color:var(--muted)}
+.table-wrap{overflow:auto}
+table{
+  width:100%;
+  border-collapse:collapse;
+  min-width:760px;
+}
+th,td{
+  padding:12px;
+  border-bottom:1px solid var(--border);
+  text-align:left;
+  font-size:.92rem;
+}
+th{color:var(--yellow)}
+.badge{
+  display:inline-block;
+  padding:5px 8px;
+  border-radius:999px;
+  font-size:.78rem;
+  font-weight:800;
+}
+.badge.valid{background:#0f3; color:#031b08}
+.badge.blocked{background:#f33; color:white}
+.screen-page{
+  background:radial-gradient(circle at center, #2b0000 0%, #050505 55%);
+}
+.screen-shell{
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  padding:30px;
+}
+.screen-logo{width:min(260px,70vw); margin-bottom:12px}
+.draw-box{
+  width:min(420px,80vw);
+  height:min(260px,40vh);
+  border-radius:36px;
+  background:linear-gradient(145deg, #160000, #250000);
+  border:4px solid var(--yellow);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:7rem;
+  font-weight:900;
+  color:var(--yellow);
+  box-shadow:0 0 60px rgba(255,212,0,.25);
+  margin:20px 0;
+}
+.big-button{font-size:1.3rem; padding:20px 34px}
+.screen-info{font-size:1.2rem; color:#ddd}
+.pin-row{
+  display:flex;
+  gap:10px;
+  width:min(560px,90vw);
+  margin-top:20px;
+}
+@media(max-width:780px){
+  .grid-2,.grid-3,.grid-4,.stats{grid-template-columns:1fr}
+  .admin-header{align-items:flex-start}
+}

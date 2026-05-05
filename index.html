@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Clube Gula & Gole</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="client-page">
+  <main class="app-shell">
+    <section class="brand-card">
+      <img class="logo" src="assets/logo.png" alt="Gula & Gole" />
+      <p class="eyebrow">Clube Gula & Gole</p>
+      <h1 id="campaignTitle">Carregando campanha...</h1>
+      <p id="campaignDesc" class="subtitle">Aguarde um instante.</p>
+    </section>
+
+    <section class="form-card">
+      <div id="closedNotice" class="notice hidden"></div>
+
+      <form id="participationForm">
+        <label>
+          Nome e sobrenome
+          <input id="name" name="name" autocomplete="name" placeholder="Ex.: João Silva" required />
+        </label>
+
+        <label>
+          WhatsApp
+          <input id="whatsapp" name="whatsapp" inputmode="tel" autocomplete="tel" placeholder="Ex.: (37) 99999-9999" required />
+        </label>
+
+        <label>
+          Número da mesa
+          <input id="tableNumber" name="tableNumber" inputmode="numeric" placeholder="Ex.: 12" required />
+        </label>
+
+        <button id="submitBtn" type="submit">Ativar localização e participar</button>
+      </form>
+
+      <p class="small">
+        Para validar sua participação, é necessário estar no Gula & Gole e permanecer presente no momento da campanha.
+      </p>
+
+      <div id="resultBox" class="result hidden"></div>
+    </section>
+  </main>
+
+  <script src="config.js"></script>
+  <script src="common.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
