@@ -1,10 +1,10 @@
 /****************************************************
- * CLUBE GULA & GOLE — GOOGLE APPS SCRIPT
+ * CLUBE GULA & GOLE — GOOGLE APPS SCRIPT V2
  * GitHub Pages + Google Sheets
  ****************************************************/
 
 const SPREADSHEET_ID = "1281Zlzx3yUMRaarU-9K0wr6oJwzkMK6yVBQ09K3vdMA";
-const ADMIN_PIN = "1234"; // depois você pode trocar
+const ADMIN_PIN = "1234";
 
 const SHEETS = {
   CONFIG: "CONFIG",
@@ -18,32 +18,36 @@ function setup() {
 
   createSheetIfMissing_(ss, SHEETS.CONFIG, ["campo", "valor"]);
   createSheetIfMissing_(ss, SHEETS.CADASTROS, [
-    "timestamp", "data", "hora", "nome", "whatsapp", "mesa",
-    "latitude", "longitude", "precisao", "distancia_metros",
-    "campanha", "status", "motivo"
+    "timestamp", "data", "hora", "campanha_id", "campanha_nome", "nome", "whatsapp", "mesa_ref",
+    "latitude", "longitude", "precisao", "distancia_metros", "status", "motivo"
   ]);
   createSheetIfMissing_(ss, SHEETS.CAMPANHAS, [
-    "data_criacao", "nome", "tipo", "descricao", "ativa"
+    "id", "nome", "tipo", "descricao", "canal", "inicio", "fim", "ativa",
+    "limiteMesa", "limiteWhats", "precisaLocalizacao", "botao"
   ]);
   createSheetIfMissing_(ss, SHEETS.GANHADORES, [
-    "timestamp", "data", "hora", "campanha", "mesa_sorteada", "observacao"
+    "timestamp", "data", "hora", "campanha_id", "campanha_nome", "mesa_sorteada", "observacao"
   ]);
 
-  const cfg = ss.getSheetByName(SHEETS.CONFIG);
-  if (cfg.getLastRow() < 2) {
-    cfg.getRange(2, 1, 12, 2).setValues([
-      ["campaignName", "Rodada Premiada"],
-      ["campaignDescription", "Cadastre-se e concorra à rodada de hoje."],
-      ["campaignType", "sorteio"],
-      ["startTime", "00:00"],
-      ["endTime", "23:59"],
-      ["tableLimit", "2"],
-      ["phoneLimit", "1"],
-      ["restaurantLat", "-20.075000"],
-      ["restaurantLng", "-44.576000"],
-      ["radiusMeters", "250"],
-      ["maxTableNumber", "60"],
-      ["timezone", "America/Sao_Paulo"]
+  setConfigDefaults_();
+
+  const campanhas = ss.getSheetByName(SHEETS.CAMPANHAS);
+  if (campanhas.getLastRow() < 2) {
+    const hoje = Utilities.formatDate(new Date(), "America/Sao_Paulo", "yyyy-MM-dd");
+
+    campanhas.appendRow([
+      "RP-" + hoje.replaceAll("-", ""),
+      "Rodada Premiada",
+      "sorteio",
+      "Cadastre-se e concorra à rodada de hoje.",
+      "restaurante",
+      hoje + " 00:00",
+      hoje + " 23:59",
+      "TRUE",
+      "2",
+      "1",
+      "TRUE",
+      "Ativar localização e participar"
     ]);
   }
 }
@@ -57,36 +61,43 @@ function doGet(e) {
     if (action === "config") result = getPublicConfig_();
     else if (action === "register") result = register_(p);
     else if (action === "adminData") result = adminData_(p);
-    else if (action === "saveConfig") result = saveConfig_(p);
+    else if (action === "saveSettings") result = saveSettings_(p);
+    else if (action === "saveCampaign") result = saveCampaign_(p);
     else if (action === "drawData") result = drawData_(p);
     else if (action === "registerWinner") result = registerWinner_(p);
     else result = { ok: false, message: "Ação inválida." };
 
     return jsonp_(p.callback, result);
   } catch (err) {
-    return jsonp_(e.parameter.callback, { ok: false, message: err.message });
+    return jsonp_((e.parameter || {}).callback, {
+      ok: false,
+      message: err.message
+    });
   }
 }
 
 function getPublicConfig_() {
-  const c = getConfig_();
+  const campaign = getActiveCampaign_();
 
   return {
     ok: true,
-    config: {
-      campaignName: c.campaignName,
-      campaignDescription: c.campaignDescription,
-      campaignType: c.campaignType,
-      startTime: normalizeTime_(c.startTime, c.timezone),
-      endTime: normalizeTime_(c.endTime, c.timezone),
-      isOpen: isWithinTime_(c.startTime, c.endTime, c.timezone)
-    }
+    campaign: campaign ? publicCampaign_(campaign) : null
   };
 }
 
 function register_(p) {
-  const c = getConfig_();
-  const timezone = c.timezone || "America/Sao_Paulo";
+  const settings = getSettings_();
+  const timezone = settings.timezone || "America/Sao_Paulo";
+  const campaign = getCampaignById_(p.campaignId) || getActiveCampaign_();
+
+  if (!campaign) {
+    return { ok: false, message: "Não há campanha ativa neste momento." };
+  }
+
+  if (!isCampaignOpen_(campaign)) {
+    return { ok: false, message: "Campanha fora do horário permitido." };
+  }
+
   const now = new Date();
   const date = Utilities.formatDate(now, timezone, "yyyy-MM-dd");
   const time = Utilities.formatDate(now, timezone, "HH:mm:ss");
@@ -101,28 +112,28 @@ function register_(p) {
   let status = "VALIDO";
   let reason = "Participação confirmada.";
 
+  const requiresLocation = String(campaign.precisaLocalizacao).toUpperCase() === "TRUE";
+  const isDelivery = campaign.canal === "delivery";
+
   if (!name || name.split(" ").length < 2) {
     status = "BLOQUEADO";
     reason = "Informe nome e sobrenome.";
   } else if (whatsapp.length < 10 || whatsapp.length > 11) {
     status = "BLOQUEADO";
     reason = "WhatsApp inválido.";
-  } else if (!tableNumber || Number(tableNumber) < 1 || Number(tableNumber) > Number(c.maxTableNumber || 60)) {
+  } else if (!isDelivery && (!tableNumber || Number(tableNumber) < 1 || Number(tableNumber) > Number(settings.maxTableNumber || 60))) {
     status = "BLOQUEADO";
     reason = "Mesa inválida.";
-  } else if (!isWithinTime_(c.startTime, c.endTime, timezone)) {
-    status = "BLOQUEADO";
-    reason = "Cadastro fora do horário permitido.";
-  } else if (isNaN(lat) || isNaN(lng)) {
+  } else if (requiresLocation && (isNaN(lat) || isNaN(lng))) {
     status = "BLOQUEADO";
     reason = "Localização não informada.";
   }
 
-  const distance = (isNaN(lat) || isNaN(lng))
-    ? ""
-    : distanceMeters_(lat, lng, Number(c.restaurantLat), Number(c.restaurantLng));
+  const distance = (!isNaN(lat) && !isNaN(lng))
+    ? distanceMeters_(lat, lng, Number(settings.restaurantLat), Number(settings.restaurantLng))
+    : "";
 
-  if (status === "VALIDO" && distance > Number(c.radiusMeters)) {
+  if (status === "VALIDO" && requiresLocation && distance > Number(settings.radiusMeters || 50)) {
     status = "BLOQUEADO";
     reason = "Localização fora do raio permitido.";
   }
@@ -131,21 +142,25 @@ function register_(p) {
 
   if (status === "VALIDO") {
     const phoneCount = existing.filter(r =>
-      r.whatsapp === whatsapp && r.status === "VALIDO"
+      r.campaignId === campaign.id &&
+      r.whatsapp === whatsapp &&
+      r.status === "VALIDO"
     ).length;
 
-    if (phoneCount >= Number(c.phoneLimit || 1)) {
+    if (phoneCount >= Number(campaign.limiteWhats || 1)) {
       status = "BLOQUEADO";
-      reason = "Este WhatsApp já está participando hoje.";
+      reason = "Este WhatsApp já está participando desta campanha.";
     }
   }
 
-  if (status === "VALIDO") {
+  if (status === "VALIDO" && !isDelivery) {
     const tableCount = existing.filter(r =>
-      String(r.tableNumber) === String(tableNumber) && r.status === "VALIDO"
+      r.campaignId === campaign.id &&
+      String(r.tableNumber) === String(tableNumber) &&
+      r.status === "VALIDO"
     ).length;
 
-    if (tableCount >= Number(c.tableLimit || 2)) {
+    if (tableCount >= Number(campaign.limiteMesa || 2)) {
       status = "BLOQUEADO";
       reason = "Esta mesa já atingiu o limite de participantes.";
     }
@@ -155,9 +170,20 @@ function register_(p) {
   const sheet = ss.getSheetByName(SHEETS.CADASTROS);
 
   sheet.appendRow([
-    now, date, time, name, whatsapp, tableNumber,
-    lat, lng, accuracy, distance,
-    c.campaignName, status, reason
+    now,
+    date,
+    time,
+    campaign.id,
+    campaign.nome,
+    name,
+    whatsapp,
+    tableNumber,
+    lat || "",
+    lng || "",
+    accuracy,
+    distance,
+    status,
+    reason
   ]);
 
   return {
@@ -170,15 +196,24 @@ function register_(p) {
 function adminData_(p) {
   checkPin_(p.pin);
 
-  const config = getConfig_();
+  const settings = getSettings_();
+  const campaigns = getCampaigns_();
   const entries = getTodayEntries_();
+  const active = getActiveCampaign_();
+
   const validEntries = entries.filter(e => e.status === "VALIDO");
-  const validTables = [...new Set(validEntries.map(e => String(e.tableNumber)))]
+
+  const validTables = [...new Set(validEntries
+    .filter(e => !active || e.campaignId === active.id)
+    .map(e => String(e.tableNumber))
+    .filter(Boolean))]
     .sort((a, b) => Number(a) - Number(b));
 
   return {
     ok: true,
-    config,
+    settings,
+    campaigns,
+    activeCampaign: active,
     total: entries.length,
     valid: validEntries.length,
     blocked: entries.length - validEntries.length,
@@ -187,67 +222,90 @@ function adminData_(p) {
   };
 }
 
-function saveConfig_(p) {
+function saveSettings_(p) {
   checkPin_(p.pin);
 
-  const allowed = [
-    "campaignName",
-    "campaignDescription",
-    "campaignType",
-    "startTime",
-    "endTime",
-    "tableLimit",
-    "phoneLimit",
-    "restaurantLat",
-    "restaurantLng",
-    "radiusMeters"
-  ];
-
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const sh = ss.getSheetByName(SHEETS.CONFIG);
-  const data = sh.getDataRange().getValues();
-
-  allowed.forEach(key => {
-    const value = String(p[key] || "").trim();
-    let row = -1;
-
-    for (let i = 1; i < data.length; i++) {
-      if (data[i][0] === key) row = i + 1;
-    }
-
-    if (row > -1) sh.getRange(row, 2).setValue(value);
-    else sh.appendRow([key, value]);
+  updateConfig_({
+    restaurantLat: p.restaurantLat,
+    restaurantLng: p.restaurantLng,
+    radiusMeters: p.radiusMeters,
+    maxTableNumber: p.maxTableNumber,
+    timezone: "America/Sao_Paulo"
   });
 
-  const campaigns = ss.getSheetByName(SHEETS.CAMPANHAS);
-  campaigns.appendRow([
-    new Date(),
-    p.campaignName || "",
-    p.campaignType || "",
-    p.campaignDescription || "",
-    "sim"
-  ]);
+  return { ok: true, message: "Dados fixos salvos." };
+}
 
-  return { ok: true, message: "Configurações salvas." };
+function saveCampaign_(p) {
+  checkPin_(p.pin);
+
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sh = ss.getSheetByName(SHEETS.CAMPANHAS);
+  const rows = sh.getDataRange().getValues();
+
+  const id = sanitize_(p.id) || ("CAMP-" + new Date().getTime());
+
+  const rowData = [
+    id,
+    sanitize_(p.nome),
+    sanitize_(p.tipo || "sorteio"),
+    sanitize_(p.descricao),
+    sanitize_(p.canal || "restaurante"),
+    sanitize_(p.inicio),
+    sanitize_(p.fim),
+    String(p.ativa || "TRUE").toUpperCase(),
+    sanitize_(p.limiteMesa || "2"),
+    sanitize_(p.limiteWhats || "1"),
+    String(p.precisaLocalizacao || "TRUE").toUpperCase(),
+    sanitize_(p.botao || "Participar agora")
+  ];
+
+  let foundRow = -1;
+
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) === String(id)) {
+      foundRow = i + 1;
+    }
+  }
+
+  if (foundRow > -1) {
+    sh.getRange(foundRow, 1, 1, rowData.length).setValues([rowData]);
+  } else {
+    sh.appendRow(rowData);
+  }
+
+  return {
+    ok: true,
+    message: "Campanha salva.",
+    id
+  };
 }
 
 function drawData_(p) {
   checkPin_(p.pin);
 
-  const config = getConfig_();
+  const campaign = getActiveCampaign_();
+
   const validTables = [...new Set(getTodayEntries_()
     .filter(e => e.status === "VALIDO")
-    .map(e => String(e.tableNumber)))]
+    .filter(e => campaign ? e.campaignId === campaign.id : true)
+    .map(e => String(e.tableNumber))
+    .filter(Boolean))]
     .sort((a, b) => Number(a) - Number(b));
 
-  return { ok: true, config, validTables };
+  return {
+    ok: true,
+    campaign,
+    validTables
+  };
 }
 
 function registerWinner_(p) {
   checkPin_(p.pin);
 
-  const c = getConfig_();
-  const timezone = c.timezone || "America/Sao_Paulo";
+  const settings = getSettings_();
+  const timezone = settings.timezone || "America/Sao_Paulo";
+  const campaign = getCampaignById_(p.campaignId) || getActiveCampaign_();
   const now = new Date();
 
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -257,7 +315,8 @@ function registerWinner_(p) {
     now,
     Utilities.formatDate(now, timezone, "yyyy-MM-dd"),
     Utilities.formatDate(now, timezone, "HH:mm:ss"),
-    c.campaignName,
+    campaign ? campaign.id : "",
+    campaign ? campaign.nome : "",
     p.tableNumber,
     "Confirmar presença manualmente."
   ]);
@@ -265,15 +324,156 @@ function registerWinner_(p) {
   return { ok: true };
 }
 
-function getTodayEntries_() {
+function getSettings_() {
   const c = getConfig_();
-  const timezone = c.timezone || "America/Sao_Paulo";
+
+  return {
+    restaurantLat: normalizeDecimal_(c.restaurantLat || "-20.07623"),
+    restaurantLng: normalizeDecimal_(c.restaurantLng || "-44.58252"),
+    radiusMeters: c.radiusMeters || "50",
+    maxTableNumber: c.maxTableNumber || "60",
+    timezone: c.timezone || "America/Sao_Paulo"
+  };
+}
+
+function getConfig_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sh = ss.getSheetByName(SHEETS.CONFIG);
+  const values = sh.getDataRange().getValues();
+  const c = {};
+
+  for (let i = 1; i < values.length; i++) {
+    c[values[i][0]] = values[i][1];
+  }
+
+  return c;
+}
+
+function updateConfig_(updates) {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sh = ss.getSheetByName(SHEETS.CONFIG);
+  const data = sh.getDataRange().getValues();
+
+  Object.keys(updates).forEach(key => {
+    let row = -1;
+
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] === key) {
+        row = i + 1;
+      }
+    }
+
+    if (row > -1) {
+      sh.getRange(row, 2).setValue(String(updates[key] || ""));
+    } else {
+      sh.appendRow([key, String(updates[key] || "")]);
+    }
+  });
+}
+
+function setConfigDefaults_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const cfg = ss.getSheetByName(SHEETS.CONFIG);
+
+  const defaults = {
+    restaurantLat: "-20.07623",
+    restaurantLng: "-44.58252",
+    radiusMeters: "50",
+    maxTableNumber: "60",
+    timezone: "America/Sao_Paulo"
+  };
+
+  const existing = cfg.getDataRange().getValues().map(r => r[0]);
+
+  Object.keys(defaults).forEach(k => {
+    if (!existing.includes(k)) {
+      cfg.appendRow([k, defaults[k]]);
+    }
+  });
+}
+
+function getCampaigns_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sh = ss.getSheetByName(SHEETS.CAMPANHAS);
+  const values = sh.getDataRange().getValues();
+  const campaigns = [];
+
+  for (let i = 1; i < values.length; i++) {
+    if (!values[i][0]) continue;
+    campaigns.push(rowToCampaign_(values[i]));
+  }
+
+  return campaigns;
+}
+
+function rowToCampaign_(r) {
+  return {
+    id: String(r[0]),
+    nome: String(r[1] || ""),
+    tipo: String(r[2] || "sorteio"),
+    descricao: String(r[3] || ""),
+    canal: String(r[4] || "restaurante"),
+    inicio: normalizeDateTime_(r[5]),
+    fim: normalizeDateTime_(r[6]),
+    ativa: String(r[7] || "FALSE").toUpperCase(),
+    limiteMesa: String(r[8] || "2"),
+    limiteWhats: String(r[9] || "1"),
+    precisaLocalizacao: String(r[10] || "TRUE").toUpperCase(),
+    botao: String(r[11] || "Participar agora")
+  };
+}
+
+function getActiveCampaign_() {
+  const campaigns = getCampaigns_();
+
+  const active = campaigns
+    .filter(c => String(c.ativa).toUpperCase() === "TRUE")
+    .filter(c => isCampaignOpen_(c))
+    .sort((a, b) => parseCampaignDate_(a.inicio) - parseCampaignDate_(b.inicio));
+
+  return active.length ? active[0] : null;
+}
+
+function getCampaignById_(id) {
+  if (!id) return null;
+  return getCampaigns_().find(c => String(c.id) === String(id)) || null;
+}
+
+function isCampaignOpen_(campaign) {
+  const now = new Date();
+  const start = parseCampaignDate_(campaign.inicio);
+  const end = parseCampaignDate_(campaign.fim);
+
+  return now >= start && now <= end;
+}
+
+function publicCampaign_(c) {
+  return {
+    id: c.id,
+    nome: c.nome,
+    tipo: c.tipo,
+    descricao: c.descricao,
+    canal: c.canal,
+    inicio: c.inicio,
+    fim: c.fim,
+    inicioBR: formatDateTimeBR_(c.inicio),
+    fimBR: formatDateTimeBR_(c.fim),
+    ativa: c.ativa,
+    limiteMesa: c.limiteMesa,
+    limiteWhats: c.limiteWhats,
+    precisaLocalizacao: c.precisaLocalizacao,
+    botao: c.botao
+  };
+}
+
+function getTodayEntries_() {
+  const settings = getSettings_();
+  const timezone = settings.timezone || "America/Sao_Paulo";
 
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sh = ss.getSheetByName(SHEETS.CADASTROS);
   const values = sh.getDataRange().getValues();
   const today = Utilities.formatDate(new Date(), timezone, "yyyy-MM-dd");
-
   const rows = [];
 
   for (let i = 1; i < values.length; i++) {
@@ -282,16 +482,17 @@ function getTodayEntries_() {
         timestamp: values[i][0],
         date: values[i][1],
         time: values[i][2],
-        name: values[i][3],
-        whatsapp: values[i][4],
-        tableNumber: values[i][5],
-        lat: values[i][6],
-        lng: values[i][7],
-        accuracy: values[i][8],
-        distance: values[i][9],
-        campaign: values[i][10],
-        status: values[i][11],
-        reason: values[i][12]
+        campaignId: values[i][3],
+        campaignName: values[i][4],
+        name: values[i][5],
+        whatsapp: values[i][6],
+        tableNumber: values[i][7],
+        lat: values[i][8],
+        lng: values[i][9],
+        accuracy: values[i][10],
+        distance: values[i][11],
+        status: values[i][12],
+        reason: values[i][13]
       });
     }
   }
@@ -299,70 +500,43 @@ function getTodayEntries_() {
   return rows;
 }
 
-function getConfig_() {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const sh = ss.getSheetByName(SHEETS.CONFIG);
-  const values = sh.getDataRange().getValues();
-
-  const c = {};
-
-  for (let i = 1; i < values.length; i++) {
-    c[values[i][0]] = values[i][1];
-  }
-
-  c.timezone = c.timezone || "America/Sao_Paulo";
-
-  return c;
-}
-
-function normalizeTime_(value, timezone) {
-  timezone = timezone || "America/Sao_Paulo";
-
-  if (!value && value !== 0) return "";
-
+function normalizeDateTime_(value) {
   if (Object.prototype.toString.call(value) === "[object Date]") {
-    return Utilities.formatDate(value, timezone, "HH:mm");
+    return Utilities.formatDate(value, "America/Sao_Paulo", "yyyy-MM-dd HH:mm");
   }
 
-  let text = String(value).trim();
-
-  const iso = text.match(/T(\d{2}):(\d{2})/);
-  if (iso) return iso[1] + ":" + iso[2];
-
-  const full = text.match(/^(\d{1,2}):(\d{2}):(\d{2})$/);
-  if (full) return full[1].padStart(2, "0") + ":" + full[2];
-
-  const simple = text.match(/^(\d{1,2}):(\d{2})$/);
-  if (simple) return simple[1].padStart(2, "0") + ":" + simple[2];
-
-  return text;
+  return String(value || "").trim();
 }
 
-function isWithinTime_(start, end, timezone) {
-  timezone = timezone || "America/Sao_Paulo";
+function parseCampaignDate_(text) {
+  text = normalizeDateTime_(text);
 
-  start = normalizeTime_(start, timezone);
-  end = normalizeTime_(end, timezone);
+  const m = text.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})$/);
 
-  if (!start || !end) return true;
-
-  const now = new Date();
-  const currentText = Utilities.formatDate(now, timezone, "HH:mm");
-
-  const toMinutes = function(t) {
-    const parts = t.split(":").map(Number);
-    return parts[0] * 60 + parts[1];
-  };
-
-  const current = toMinutes(currentText);
-  const startMinutes = toMinutes(start);
-  const endMinutes = toMinutes(end);
-
-  if (startMinutes <= endMinutes) {
-    return current >= startMinutes && current <= endMinutes;
+  if (!m) {
+    throw new Error("Data/hora inválida na campanha: " + text);
   }
 
-  return current >= startMinutes || current <= endMinutes;
+  return new Date(
+    Number(m[1]),
+    Number(m[2]) - 1,
+    Number(m[3]),
+    Number(m[4]),
+    Number(m[5]),
+    0
+  );
+}
+
+function formatDateTimeBR_(text) {
+  const m = String(text).match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})$/);
+
+  if (!m) return text;
+
+  return `${m[3]}/${m[2]}/${m[1]} às ${m[4]}:${m[5]}`;
+}
+
+function normalizeDecimal_(value) {
+  return String(value || "").replace(",", ".").trim();
 }
 
 function distanceMeters_(lat1, lon1, lat2, lon2) {
