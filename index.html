@@ -13,6 +13,7 @@
       <p class="eyebrow">Clube Gula & Gole</p>
       <h1 id="campaignTitle">Carregando campanha...</h1>
       <p id="campaignDesc" class="subtitle">Aguarde um instante.</p>
+      <p id="campaignWindow" class="small"></p>
     </section>
 
     <section class="form-card">
@@ -29,15 +30,15 @@
           <input id="whatsapp" name="whatsapp" inputmode="tel" autocomplete="tel" placeholder="Ex.: (37) 99999-9999" required />
         </label>
 
-        <label>
+        <label id="tableLabel">
           Número da mesa
-          <input id="tableNumber" name="tableNumber" inputmode="numeric" placeholder="Ex.: 12" required />
+          <input id="tableNumber" name="tableNumber" inputmode="numeric" placeholder="Ex.: 12" />
         </label>
 
         <button id="submitBtn" type="submit">Ativar localização e participar</button>
       </form>
 
-      <p class="small">
+      <p id="validationText" class="small">
         Para validar sua participação, é necessário estar no Gula & Gole e permanecer presente no momento da campanha.
       </p>
 
