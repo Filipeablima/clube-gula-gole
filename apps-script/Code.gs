@@ -1,11 +1,10 @@
 /****************************************************
  * CLUBE GULA & GOLE — GOOGLE APPS SCRIPT
- * Estrutura sem custo: GitHub Pages + Google Sheets
- * Use como Web App: Deploy > New deployment > Web app
+ * GitHub Pages + Google Sheets
  ****************************************************/
 
-const SPREADSHEET_ID = "COLE_AQUI_O_ID_DA_PLANILHA";
-const ADMIN_PIN = "1234"; // TROQUE ANTES DE USAR
+const SPREADSHEET_ID = "1281Zlzx3yUMRaarU-9K0wr6oJwzkMK6yVBQ09K3vdMA";
+const ADMIN_PIN = "1234"; // depois você pode trocar
 
 const SHEETS = {
   CONFIG: "CONFIG",
@@ -32,12 +31,12 @@ function setup() {
 
   const cfg = ss.getSheetByName(SHEETS.CONFIG);
   if (cfg.getLastRow() < 2) {
-    cfg.getRange(2,1,12,2).setValues([
+    cfg.getRange(2, 1, 12, 2).setValues([
       ["campaignName", "Rodada Premiada"],
       ["campaignDescription", "Cadastre-se e concorra à rodada de hoje."],
       ["campaignType", "sorteio"],
-      ["startTime", "18:00"],
-      ["endTime", "23:00"],
+      ["startTime", "00:00"],
+      ["endTime", "23:59"],
       ["tableLimit", "2"],
       ["phoneLimit", "1"],
       ["restaurantLat", "-20.075000"],
@@ -61,24 +60,25 @@ function doGet(e) {
     else if (action === "saveConfig") result = saveConfig_(p);
     else if (action === "drawData") result = drawData_(p);
     else if (action === "registerWinner") result = registerWinner_(p);
-    else result = { ok:false, message:"Ação inválida." };
+    else result = { ok: false, message: "Ação inválida." };
 
     return jsonp_(p.callback, result);
   } catch (err) {
-    return jsonp_(e.parameter.callback, { ok:false, message: err.message });
+    return jsonp_(e.parameter.callback, { ok: false, message: err.message });
   }
 }
 
 function getPublicConfig_() {
   const c = getConfig_();
+
   return {
-    ok:true,
+    ok: true,
     config: {
       campaignName: c.campaignName,
       campaignDescription: c.campaignDescription,
       campaignType: c.campaignType,
-      startTime: c.startTime,
-      endTime: c.endTime,
+      startTime: normalizeTime_(c.startTime, c.timezone),
+      endTime: normalizeTime_(c.endTime, c.timezone),
       isOpen: isWithinTime_(c.startTime, c.endTime, c.timezone)
     }
   };
@@ -86,9 +86,10 @@ function getPublicConfig_() {
 
 function register_(p) {
   const c = getConfig_();
+  const timezone = c.timezone || "America/Sao_Paulo";
   const now = new Date();
-  const date = Utilities.formatDate(now, c.timezone, "yyyy-MM-dd");
-  const time = Utilities.formatDate(now, c.timezone, "HH:mm:ss");
+  const date = Utilities.formatDate(now, timezone, "yyyy-MM-dd");
+  const time = Utilities.formatDate(now, timezone, "HH:mm:ss");
 
   const name = sanitize_(p.name);
   const whatsapp = onlyDigits_(p.whatsapp);
@@ -101,35 +102,52 @@ function register_(p) {
   let reason = "Participação confirmada.";
 
   if (!name || name.split(" ").length < 2) {
-    status = "BLOQUEADO"; reason = "Informe nome e sobrenome.";
+    status = "BLOQUEADO";
+    reason = "Informe nome e sobrenome.";
   } else if (whatsapp.length < 10 || whatsapp.length > 11) {
-    status = "BLOQUEADO"; reason = "WhatsApp inválido.";
+    status = "BLOQUEADO";
+    reason = "WhatsApp inválido.";
   } else if (!tableNumber || Number(tableNumber) < 1 || Number(tableNumber) > Number(c.maxTableNumber || 60)) {
-    status = "BLOQUEADO"; reason = "Mesa inválida.";
-  } else if (!isWithinTime_(c.startTime, c.endTime, c.timezone)) {
-    status = "BLOQUEADO"; reason = "Cadastro fora do horário permitido.";
+    status = "BLOQUEADO";
+    reason = "Mesa inválida.";
+  } else if (!isWithinTime_(c.startTime, c.endTime, timezone)) {
+    status = "BLOQUEADO";
+    reason = "Cadastro fora do horário permitido.";
   } else if (isNaN(lat) || isNaN(lng)) {
-    status = "BLOQUEADO"; reason = "Localização não informada.";
+    status = "BLOQUEADO";
+    reason = "Localização não informada.";
   }
 
-  const distance = (isNaN(lat) || isNaN(lng)) ? "" : distanceMeters_(lat, lng, Number(c.restaurantLat), Number(c.restaurantLng));
+  const distance = (isNaN(lat) || isNaN(lng))
+    ? ""
+    : distanceMeters_(lat, lng, Number(c.restaurantLat), Number(c.restaurantLng));
 
   if (status === "VALIDO" && distance > Number(c.radiusMeters)) {
-    status = "BLOQUEADO"; reason = "Localização fora do raio permitido.";
+    status = "BLOQUEADO";
+    reason = "Localização fora do raio permitido.";
   }
 
   const existing = getTodayEntries_();
+
   if (status === "VALIDO") {
-    const phoneCount = existing.filter(r => r.whatsapp === whatsapp && r.status === "VALIDO").length;
+    const phoneCount = existing.filter(r =>
+      r.whatsapp === whatsapp && r.status === "VALIDO"
+    ).length;
+
     if (phoneCount >= Number(c.phoneLimit || 1)) {
-      status = "BLOQUEADO"; reason = "Este WhatsApp já está participando hoje.";
+      status = "BLOQUEADO";
+      reason = "Este WhatsApp já está participando hoje.";
     }
   }
 
   if (status === "VALIDO") {
-    const tableCount = existing.filter(r => String(r.tableNumber) === String(tableNumber) && r.status === "VALIDO").length;
+    const tableCount = existing.filter(r =>
+      String(r.tableNumber) === String(tableNumber) && r.status === "VALIDO"
+    ).length;
+
     if (tableCount >= Number(c.tableLimit || 2)) {
-      status = "BLOQUEADO"; reason = "Esta mesa já atingiu o limite de participantes.";
+      status = "BLOQUEADO";
+      reason = "Esta mesa já atingiu o limite de participantes.";
     }
   }
 
@@ -151,13 +169,15 @@ function register_(p) {
 
 function adminData_(p) {
   checkPin_(p.pin);
+
   const config = getConfig_();
   const entries = getTodayEntries_();
   const validEntries = entries.filter(e => e.status === "VALIDO");
-  const validTables = [...new Set(validEntries.map(e => String(e.tableNumber)))].sort((a,b)=>Number(a)-Number(b));
+  const validTables = [...new Set(validEntries.map(e => String(e.tableNumber)))]
+    .sort((a, b) => Number(a) - Number(b));
 
   return {
-    ok:true,
+    ok: true,
     config,
     total: entries.length,
     valid: validEntries.length,
@@ -169,10 +189,20 @@ function adminData_(p) {
 
 function saveConfig_(p) {
   checkPin_(p.pin);
+
   const allowed = [
-    "campaignName", "campaignDescription", "campaignType", "startTime", "endTime",
-    "tableLimit", "phoneLimit", "restaurantLat", "restaurantLng", "radiusMeters"
+    "campaignName",
+    "campaignDescription",
+    "campaignType",
+    "startTime",
+    "endTime",
+    "tableLimit",
+    "phoneLimit",
+    "restaurantLat",
+    "restaurantLng",
+    "radiusMeters"
   ];
+
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sh = ss.getSheetByName(SHEETS.CONFIG);
   const data = sh.getDataRange().getValues();
@@ -180,54 +210,73 @@ function saveConfig_(p) {
   allowed.forEach(key => {
     const value = String(p[key] || "").trim();
     let row = -1;
-    for (let i=1;i<data.length;i++) if (data[i][0] === key) row = i+1;
+
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] === key) row = i + 1;
+    }
+
     if (row > -1) sh.getRange(row, 2).setValue(value);
     else sh.appendRow([key, value]);
   });
 
   const campaigns = ss.getSheetByName(SHEETS.CAMPANHAS);
-  campaigns.appendRow([new Date(), p.campaignName || "", p.campaignType || "", p.campaignDescription || "", "sim"]);
+  campaigns.appendRow([
+    new Date(),
+    p.campaignName || "",
+    p.campaignType || "",
+    p.campaignDescription || "",
+    "sim"
+  ]);
 
-  return { ok:true, message:"Configurações salvas." };
+  return { ok: true, message: "Configurações salvas." };
 }
 
 function drawData_(p) {
   checkPin_(p.pin);
+
   const config = getConfig_();
   const validTables = [...new Set(getTodayEntries_()
     .filter(e => e.status === "VALIDO")
     .map(e => String(e.tableNumber)))]
-    .sort((a,b)=>Number(a)-Number(b));
+    .sort((a, b) => Number(a) - Number(b));
 
-  return { ok:true, config, validTables };
+  return { ok: true, config, validTables };
 }
 
 function registerWinner_(p) {
   checkPin_(p.pin);
+
   const c = getConfig_();
+  const timezone = c.timezone || "America/Sao_Paulo";
   const now = new Date();
+
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sh = ss.getSheetByName(SHEETS.GANHADORES);
+
   sh.appendRow([
     now,
-    Utilities.formatDate(now, c.timezone, "yyyy-MM-dd"),
-    Utilities.formatDate(now, c.timezone, "HH:mm:ss"),
+    Utilities.formatDate(now, timezone, "yyyy-MM-dd"),
+    Utilities.formatDate(now, timezone, "HH:mm:ss"),
     c.campaignName,
     p.tableNumber,
     "Confirmar presença manualmente."
   ]);
-  return { ok:true };
+
+  return { ok: true };
 }
 
 function getTodayEntries_() {
   const c = getConfig_();
+  const timezone = c.timezone || "America/Sao_Paulo";
+
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sh = ss.getSheetByName(SHEETS.CADASTROS);
   const values = sh.getDataRange().getValues();
-  const today = Utilities.formatDate(new Date(), c.timezone, "yyyy-MM-dd");
+  const today = Utilities.formatDate(new Date(), timezone, "yyyy-MM-dd");
+
   const rows = [];
 
-  for (let i=1; i<values.length; i++) {
+  for (let i = 1; i < values.length; i++) {
     if (values[i][1] === today) {
       rows.push({
         timestamp: values[i][0],
@@ -246,6 +295,7 @@ function getTodayEntries_() {
       });
     }
   }
+
   return rows;
 }
 
@@ -253,37 +303,97 @@ function getConfig_() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sh = ss.getSheetByName(SHEETS.CONFIG);
   const values = sh.getDataRange().getValues();
+
   const c = {};
-  for (let i=1;i<values.length;i++) c[values[i][0]] = values[i][1];
+
+  for (let i = 1; i < values.length; i++) {
+    c[values[i][0]] = values[i][1];
+  }
+
   c.timezone = c.timezone || "America/Sao_Paulo";
+
   return c;
 }
 
+function normalizeTime_(value, timezone) {
+  timezone = timezone || "America/Sao_Paulo";
+
+  if (!value && value !== 0) return "";
+
+  if (Object.prototype.toString.call(value) === "[object Date]") {
+    return Utilities.formatDate(value, timezone, "HH:mm");
+  }
+
+  let text = String(value).trim();
+
+  const iso = text.match(/T(\d{2}):(\d{2})/);
+  if (iso) return iso[1] + ":" + iso[2];
+
+  const full = text.match(/^(\d{1,2}):(\d{2}):(\d{2})$/);
+  if (full) return full[1].padStart(2, "0") + ":" + full[2];
+
+  const simple = text.match(/^(\d{1,2}):(\d{2})$/);
+  if (simple) return simple[1].padStart(2, "0") + ":" + simple[2];
+
+  return text;
+}
+
 function isWithinTime_(start, end, timezone) {
+  timezone = timezone || "America/Sao_Paulo";
+
+  start = normalizeTime_(start, timezone);
+  end = normalizeTime_(end, timezone);
+
+  if (!start || !end) return true;
+
   const now = new Date();
-  const current = Utilities.formatDate(now, timezone || "America/Sao_Paulo", "HH:mm");
-  return current >= start && current <= end;
+  const currentText = Utilities.formatDate(now, timezone, "HH:mm");
+
+  const toMinutes = function(t) {
+    const parts = t.split(":").map(Number);
+    return parts[0] * 60 + parts[1];
+  };
+
+  const current = toMinutes(currentText);
+  const startMinutes = toMinutes(start);
+  const endMinutes = toMinutes(end);
+
+  if (startMinutes <= endMinutes) {
+    return current >= startMinutes && current <= endMinutes;
+  }
+
+  return current >= startMinutes || current <= endMinutes;
 }
 
 function distanceMeters_(lat1, lon1, lat2, lon2) {
   const R = 6371000;
   const toRad = v => v * Math.PI / 180;
-  const dLat = toRad(lat2-lat1);
-  const dLon = toRad(lon2-lon1);
-  const a = Math.sin(dLat/2)**2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-    Math.sin(dLon/2)**2;
-  return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) *
+    Math.cos(toRad(lat2)) *
+    Math.sin(dLon / 2) ** 2;
+
+  return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }
 
 function jsonp_(callback, obj) {
   const json = JSON.stringify(obj);
   const output = callback ? `${callback}(${json});` : json;
-  return ContentService.createTextOutput(output).setMimeType(ContentService.MimeType.JAVASCRIPT);
+
+  return ContentService
+    .createTextOutput(output)
+    .setMimeType(ContentService.MimeType.JAVASCRIPT);
 }
 
 function checkPin_(pin) {
-  if (String(pin) !== String(ADMIN_PIN)) throw new Error("PIN inválido.");
+  if (String(pin) !== String(ADMIN_PIN)) {
+    throw new Error("PIN inválido.");
+  }
 }
 
 function sanitize_(v) {
@@ -296,6 +406,10 @@ function onlyDigits_(v) {
 
 function createSheetIfMissing_(ss, name, headers) {
   let sh = ss.getSheetByName(name);
+
   if (!sh) sh = ss.insertSheet(name);
-  if (sh.getLastRow() === 0) sh.appendRow(headers);
+
+  if (sh.getLastRow() === 0) {
+    sh.appendRow(headers);
+  }
 }
