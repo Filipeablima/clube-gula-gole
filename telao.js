@@ -1,5 +1,5 @@
 let validTables = [];
-let campaignName = "Rodada Premiada";
+let activeCampaign = null;
 let screenPin = "";
 
 async function loadScreenData(){
@@ -14,11 +14,10 @@ async function loadScreenData(){
     if(!data.ok) throw new Error(data.message || "Erro ao carregar mesas.");
 
     validTables = data.validTables || [];
-    campaignName = data.config?.campaignName || "Rodada Premiada";
-    document.getElementById("screenCampaign").textContent = campaignName;
+    activeCampaign = data.campaign;
+    setText("screenCampaign", activeCampaign?.nome || "Nenhuma campanha ativa");
 
-    document.getElementById("screenInfo").textContent =
-      validTables.length + " mesa(s) válida(s) disponíveis para sorteio.";
+    setText("screenInfo", validTables.length + " mesa(s) válida(s) disponíveis para sorteio.");
   }catch(err){
     alert(err.message);
   }
@@ -38,19 +37,19 @@ function startDraw(){
     const randomTable = validTables[Math.floor(Math.random()*validTables.length)];
     box.textContent = randomTable;
     i++;
-    if(i > 35){
+    if(i > 38){
       clearInterval(interval);
       const winner = validTables[Math.floor(Math.random()*validTables.length)];
       box.textContent = winner;
       info.textContent = "🎉 Mesa " + winner + " foi sorteada! Confirmar presença na mesa.";
       registerWinner(winner);
     }
-  }, 80);
+  }, 75);
 }
 
 async function registerWinner(tableNumber){
-  if(!screenPin) return;
+  if(!screenPin || !activeCampaign) return;
   try{
-    await jsonp({action:"registerWinner", pin:screenPin, tableNumber});
+    await jsonp({action:"registerWinner", pin:screenPin, tableNumber, campaignId: activeCampaign.id});
   }catch(e){}
 }
