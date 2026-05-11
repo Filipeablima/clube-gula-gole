@@ -1,17 +1,19 @@
 function jsonp(params){
   return new Promise((resolve, reject) => {
     if(!SCRIPT_URL || SCRIPT_URL.includes("COLE_AQUI")){
-      reject(new Error("Configure a variável SCRIPT_URL no arquivo config.js"));
+      reject(new Error("Configure a URL do Apps Script no arquivo config.js"));
       return;
     }
+
     const callbackName = "cb_" + Date.now() + "_" + Math.floor(Math.random()*9999);
     params.callback = callbackName;
-    const url = SCRIPT_URL + "?" + new URLSearchParams(params).toString();
 
+    const url = SCRIPT_URL + "?" + new URLSearchParams(params).toString();
     const script = document.createElement("script");
+
     const timeout = setTimeout(() => {
       cleanup();
-      reject(new Error("Tempo esgotado. Verifique a URL do Apps Script."));
+      reject(new Error("Tempo esgotado ao conectar."));
     }, 15000);
 
     function cleanup(){
@@ -41,18 +43,33 @@ function onlyDigits(value){
 
 function formatPhoneBR(raw){
   let d = onlyDigits(raw);
-  if(d.length === 11){
-    return d.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
-  }
-  if(d.length === 10){
-    return d.replace(/(\d{2})(\d{4})(\d{4})/, "($1) $2-$3");
-  }
+  if(d.length === 11) return d.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
+  if(d.length === 10) return d.replace(/(\d{2})(\d{4})(\d{4})/, "($1) $2-$3");
   return raw;
 }
 
 function showBox(id, message, type="success"){
   const el = document.getElementById(id);
+  if(!el) return;
   el.textContent = message;
   el.className = "result " + type;
   el.classList.remove("hidden");
+}
+
+function setText(id, text){
+  const el = document.getElementById(id);
+  if(el) el.textContent = text || "";
+}
+
+function safe(v){
+  return (v === undefined || v === null) ? "" : String(v);
+}
+
+function downloadCSV(filename, rows){
+  const csv = rows.map(r => r.map(v => `"${String(v ?? "").replaceAll('"','""')}"`).join(";")).join("\n");
+  const blob = new Blob(["\ufeff" + csv], {type:"text/csv;charset=utf-8;"});
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  link.click();
 }
